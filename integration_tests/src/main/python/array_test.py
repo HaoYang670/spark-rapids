@@ -12,16 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from time import sleep
+import time
 import pytest
 
-from asserts import assert_gpu_and_cpu_are_equal_collect, assert_gpu_and_cpu_are_equal_sql, assert_gpu_and_cpu_error, assert_gpu_fallback_collect
+from asserts import assert_gpu_and_cpu_are_equal_collect, assert_gpu_and_cpu_are_equal_iterator, assert_gpu_and_cpu_are_equal_sql, assert_gpu_and_cpu_error, assert_gpu_fallback_collect
 from data_gen import *
 from functools import reduce
-from spark_session import is_before_spark_311
+import pyspark
+from spark_session import is_before_spark_311, with_cpu_session, with_gpu_session
 from marks import allow_non_gpu
 from pyspark.sql.types import *
 from pyspark.sql.types import IntegralType
-from pyspark.sql.functions import array_contains, col, first, isnan, lit, element_at
+from pyspark.sql.functions import array_contains, col, first, isnan, length, lit, element_at
 
 # Once we support arrays as literals then we can support a[null] and
 # negative indexes for all array gens. When that happens
@@ -309,3 +312,69 @@ def test_cast_array_with_unsupported_element_to_string(data_gen):
         f.col('a').cast("STRING")
     )
 )
+
+
+def test_performance_cast_array_to_string():
+    row_exp = 8
+    array_len = 1
+    driver_exp = 5
+    worker_exp = row_exp - driver_exp
+    data_path = "/home/remziy/working/rapids/spark-rapids/integration_tests/data/parquet_data{}_{}".format(row_exp, array_len)
+
+
+    def write_parquet(spark):
+        rdd = spark.sparkContext.parallelize(range(10 ** driver_exp))
+        rdd1 = rdd.flatMap(lambda _: range(10 ** worker_exp)).map(lambda _: Row([0] * array_len))
+        schema = StructType([StructField("value", ArrayType(ByteType(), True), True)])
+        df =spark.createDataFrame(rdd1, schema)
+        return df.write.mode("ignore").parquet(data_path)
+
+    def read_parquet(spark):
+        df = spark.read.parquet(data_path)
+        return df
+
+    
+    def cast(df):
+        return df.withColumn("b", f.col('value').cast("STRING")).agg({'b':'max'}).collect()
+
+
+
+    start = time.time()
+    with_cpu_session(write_parquet)
+    print("create testing data uses {} secs".format(time.time() - start))
+    
+    print(" the dataframe has {} rows. Each row is a byte array with {} elements".format(10 ** row_exp, array_len))
+    print(" Size of the dataframe is approximately {:.2f} GB".format((10 ** row_exp) * array_len / (10 ** 9)))
+
+    def run_test(is_legacy, reps, run_on_GPU, concurrentGpuTasks):
+        times = []
+        def func(spark):
+            #print (spark.conf.get('spark.rapids.sql.concurrentGpuTasks'))
+            cast(read_parquet(spark))
+
+        conf = {'spark.sql.legacy.castComplexTypesToString.enabled': 'true' if is_legacy else 'false',
+                'spark.rapids.sql.concurrentGpuTasks': str(concurrentGpuTasks)}
+
+        session = with_gpu_session if run_on_GPU else with_cpu_session
+
+        # warm up
+        """
+        for _ in range(1):
+            session(func, conf)  
+        """
+        # test
+        for _ in range(reps):
+            start = time.time()
+            session(func, conf)
+            times.append(time.time() - start)
+
+        print("run on {}, {} legacy".format("GPU" if run_on_GPU else "CPU", "enable" if is_legacy else "disable"))
+        print("repeat {} times, average consumed time is {:.4f} secs".format(len(times), sum(times) / len(times))) 
+
+    reps = 1
+    run_test(False, reps, False, 16)
+    #run_test(True, reps, False)
+    run_test(False, reps, True, 1)
+    #run_test(True, reps, True)
+
+    sleep(10000)
