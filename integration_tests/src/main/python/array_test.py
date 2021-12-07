@@ -316,7 +316,7 @@ def test_cast_array_with_unsupported_element_to_string(data_gen):
 
 def test_performance_cast_array_to_string():
     row_exp = 8
-    array_len = 1
+    array_len = 50
     driver_exp = 5
     worker_exp = row_exp - driver_exp
     data_path = "/home/remziy/working/rapids/spark-rapids/integration_tests/data/parquet_data{}_{}".format(row_exp, array_len)
@@ -346,22 +346,21 @@ def test_performance_cast_array_to_string():
     print(" the dataframe has {} rows. Each row is a byte array with {} elements".format(10 ** row_exp, array_len))
     print(" Size of the dataframe is approximately {:.2f} GB".format((10 ** row_exp) * array_len / (10 ** 9)))
 
-    def run_test(is_legacy, reps, run_on_GPU, concurrentGpuTasks):
+    def run_test(is_legacy, reps, run_on_GPU):
         times = []
         def func(spark):
             #print (spark.conf.get('spark.rapids.sql.concurrentGpuTasks'))
             cast(read_parquet(spark))
 
-        conf = {'spark.sql.legacy.castComplexTypesToString.enabled': 'true' if is_legacy else 'false',
-                'spark.rapids.sql.concurrentGpuTasks': str(concurrentGpuTasks)}
+        conf = {'spark.sql.legacy.castComplexTypesToString.enabled': 'true' if is_legacy else 'false'}
+               # 'spark.rapids.sql.concurrentGpuTasks': str(concurrentGpuTasks)}
 
         session = with_gpu_session if run_on_GPU else with_cpu_session
 
         # warm up
-        """
         for _ in range(1):
             session(func, conf)  
-        """
+        
         # test
         for _ in range(reps):
             start = time.time()
@@ -371,10 +370,10 @@ def test_performance_cast_array_to_string():
         print("run on {}, {} legacy".format("GPU" if run_on_GPU else "CPU", "enable" if is_legacy else "disable"))
         print("repeat {} times, average consumed time is {:.4f} secs".format(len(times), sum(times) / len(times))) 
 
-    reps = 1
-    run_test(False, reps, False, 16)
-    #run_test(True, reps, False)
-    run_test(False, reps, True, 1)
-    #run_test(True, reps, True)
+    reps = 5
+    run_test(False, reps, False)
+    run_test(True, reps, False)
+    run_test(False, reps, True)
+    run_test(True, reps, True)
 
     sleep(10000)
