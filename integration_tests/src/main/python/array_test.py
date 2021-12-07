@@ -358,7 +358,7 @@ def test_performance_cast_array_to_string():
         session = with_gpu_session if run_on_GPU else with_cpu_session
 
         # warm up
-        for _ in range(1):
+        for _ in range(5):
             session(func, conf)  
         
         # test
