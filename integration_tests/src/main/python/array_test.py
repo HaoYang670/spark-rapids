@@ -349,16 +349,18 @@ def test_performance_cast_array_to_string():
     def run_test(is_legacy, reps, run_on_GPU):
         times = []
         def func(spark):
-            #print (spark.conf.get('spark.rapids.sql.concurrentGpuTasks'))
+            print (spark.conf.get('spark.rapids.sql.concurrentGpuTasks'))
             cast(read_parquet(spark))
 
-        conf = {'spark.sql.legacy.castComplexTypesToString.enabled': 'true' if is_legacy else 'false'}
-               # 'spark.rapids.sql.concurrentGpuTasks': str(concurrentGpuTasks)}
+        conf = {
+              'spark.sql.legacy.castComplexTypesToString.enabled': 'true' if is_legacy else 'false'
+            , 'spark.rapids.sql.concurrentGpuTasks': '16'
+            }
 
         session = with_gpu_session if run_on_GPU else with_cpu_session
 
         # warm up
-        for _ in range(5):
+        for _ in range(1):
             session(func, conf)  
         
         # test
@@ -370,9 +372,9 @@ def test_performance_cast_array_to_string():
         print("run on {}, {} legacy".format("GPU" if run_on_GPU else "CPU", "enable" if is_legacy else "disable"))
         print("repeat {} times, average consumed time is {:.4f} secs".format(len(times), sum(times) / len(times))) 
 
-    reps = 5
-    run_test(False, reps, False)
-    run_test(True, reps, False)
+    reps = 1
+    #run_test(False, reps, False)
+    #run_test(True, reps, False)
     run_test(False, reps, True)
     run_test(True, reps, True)
 
