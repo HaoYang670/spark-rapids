@@ -354,7 +354,7 @@ def test_performance_cast_array_to_string():
 
         conf = {
               'spark.sql.legacy.castComplexTypesToString.enabled': 'true' if is_legacy else 'false'
-            , 'spark.rapids.sql.concurrentGpuTasks': '16'
+            #, 'spark.rapids.sql.concurrentGpuTasks': '16'
             }
 
         session = with_gpu_session if run_on_GPU else with_cpu_session
@@ -373,9 +373,9 @@ def test_performance_cast_array_to_string():
         print("repeat {} times, average consumed time is {:.4f} secs".format(len(times), sum(times) / len(times))) 
 
     reps = 1
+    run_test(False, reps, True)
+    #run_test(True, reps, True)
     #run_test(False, reps, False)
     #run_test(True, reps, False)
-    run_test(False, reps, True)
-    run_test(True, reps, True)
 
     sleep(10000)

@@ -31,6 +31,8 @@ def _spark__init():
     _sb = pyspark.sql.SparkSession.builder
     _sb.config('spark.plugins', 'com.nvidia.spark.SQLPlugin') \
             .config("spark.sql.adaptive.enabled", "false") \
+            .config("spark.task.cpus", "1") \
+            .config("spark.rapids.sql.concurrentGpuTasks", "8") \
             .config('spark.sql.queryExecutionListeners', 'com.nvidia.spark.rapids.ExecutionPlanCaptureCallback')
 
     for key, value in os.environ.items():
