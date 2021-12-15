@@ -31,9 +31,13 @@ def _spark__init():
     _sb = pyspark.sql.SparkSession.builder
     _sb.config('spark.plugins', 'com.nvidia.spark.SQLPlugin') \
             .config("spark.sql.adaptive.enabled", "false") \
-            .config("spark.task.cpus", "1") \
-            .config("spark.rapids.sql.concurrentGpuTasks", "8") \
-            .config('spark.sql.queryExecutionListeners', 'com.nvidia.spark.rapids.ExecutionPlanCaptureCallback')
+            .config("spark.task.cpus", "16") \
+            .config("spark.rapids.sql.concurrentGpuTasks", "1") \
+            .config("spark.sql.files.maxPartitionBytes", "512MB") \
+            .config("spark.eventlog.enabled", "true") \
+            .config('spark.sql.queryExecutionListeners', 'com.nvidia.spark.rapids.ExecutionPlanCaptureCallback') 
+            #.config("spark.rapids.sql.format.parquet.reader.type", "PERFILE") \
+#            .config("spark.rapids.memory.gpu.allocFraction", "1") \
 
     for key, value in os.environ.items():
         if key.startswith('PYSP_TEST_') and key != _DRIVER_ENV:

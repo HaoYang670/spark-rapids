@@ -315,19 +315,23 @@ def test_cast_array_with_unsupported_element_to_string(data_gen):
 
 
 def test_performance_cast_array_to_string():
+    """
+    first run the scipt in working/spark-data-gen/example/tools/data_gen/spark to
+    generate parquet file
+    """
     row_exp = 8
-    array_len = 50
-    driver_exp = 5
-    worker_exp = row_exp - driver_exp
-    data_path = "/home/remziy/working/rapids/spark-rapids/integration_tests/data/parquet_data{}_{}".format(row_exp, array_len)
+    partitions = 1024
+    store_format = "parquet"
+    data_path = "/home/remziy/working/spark-data-gen/data/{}{}{}".format(row_exp, store_format, partitions)
 
-
+    """
     def write_parquet(spark):
-        rdd = spark.sparkContext.parallelize(range(10 ** driver_exp))
+        rdd = spark.sparkContext.parallelize(range(10 ** driver_exp), partitions)
         rdd1 = rdd.flatMap(lambda _: range(10 ** worker_exp)).map(lambda _: Row([0] * array_len))
         schema = StructType([StructField("value", ArrayType(ByteType(), True), True)])
         df =spark.createDataFrame(rdd1, schema)
         return df.write.mode("ignore").parquet(data_path)
+    """
 
     def read_parquet(spark):
         df = spark.read.parquet(data_path)
@@ -336,15 +340,8 @@ def test_performance_cast_array_to_string():
     
     def cast(df):
         return df.withColumn("b", f.col('value').cast("STRING")).agg({'b':'max'}).collect()
-
-
-
-    start = time.time()
-    with_cpu_session(write_parquet)
-    print("create testing data uses {} secs".format(time.time() - start))
     
-    print(" the dataframe has {} rows. Each row is a byte array with {} elements".format(10 ** row_exp, array_len))
-    print(" Size of the dataframe is approximately {:.2f} GB".format((10 ** row_exp) * array_len / (10 ** 9)))
+    print(" the dataframe has {} rows".format(10 ** row_exp))
 
     def run_test(is_legacy, reps, run_on_GPU):
         times = []
@@ -354,7 +351,6 @@ def test_performance_cast_array_to_string():
 
         conf = {
               'spark.sql.legacy.castComplexTypesToString.enabled': 'true' if is_legacy else 'false'
-            #, 'spark.rapids.sql.concurrentGpuTasks': '16'
             }
 
         session = with_gpu_session if run_on_GPU else with_cpu_session
