@@ -337,17 +337,31 @@ def test_performance_cast_array_to_string():
         df = spark.read.parquet(data_path)
         return df
 
+    def cast_1_level(df):
+        df.coalesce(50).withColumn("value", f.col('value').cast("STRING")).agg({'value':'max'}).collect()
     
-    def cast(df):
-        return df.withColumn("b", f.col('value').cast("STRING")).agg({'b':'max'}).collect()
+    def cast_2_level(df):
+        df.withColumn("value", f.array('value')).coalesce(50).withColumn("value", f.col('value').cast("STRING")).agg({'value':'max'}).collect()
+    """
+    def cast_3_level(df):
+        # not supported by Rapids now!
+        
+        df.withColumn("value", f.array('value')).withColumn("value", f.array('value')).coalesce(50).withColumn("value", f.col('value').cast("STRING")).agg({'value':'max'}).collect()
+    """
     
     print(" the dataframe has {} rows".format(10 ** row_exp))
 
     def run_test(is_legacy, reps, run_on_GPU):
         times = []
-        def func(spark):
-            print (spark.conf.get('spark.rapids.sql.concurrentGpuTasks'))
-            cast(read_parquet(spark))
+        def func_1_level(spark):
+            print("cast array<int> to string")
+            print ("GPU concurrent task = {} ".format(spark.conf.get('spark.rapids.sql.concurrentGpuTasks')))
+            cast_1_level(read_parquet(spark))
+
+        def func_2_level(spark):
+            print("cast array<array<int>> to string")
+            print ("GPU concurrent task = {} ".format(spark.conf.get('spark.rapids.sql.concurrentGpuTasks')))
+            cast_2_level(read_parquet(spark))
 
         conf = {
               'spark.sql.legacy.castComplexTypesToString.enabled': 'true' if is_legacy else 'false'
@@ -357,12 +371,14 @@ def test_performance_cast_array_to_string():
 
         # warm up
         for _ in range(1):
-            session(func, conf)  
+            session(func_2_level, conf)  
+            session(func_1_level, conf)  
         
         # test
         for _ in range(reps):
             start = time.time()
-            session(func, conf)
+            session(func_2_level, conf)  
+            session(func_1_level, conf)
             times.append(time.time() - start)
 
         print("run on {}, {} legacy".format("GPU" if run_on_GPU else "CPU", "enable" if is_legacy else "disable"))
